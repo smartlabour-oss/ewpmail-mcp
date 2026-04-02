@@ -10,7 +10,7 @@ app.use(express.json());
 
 // Create MCP server
 const server = new McpServer({
-  name: "gmail-mcp",
+  name: "ewpmail-mcp",
   version: "1.0.0",
 });
 
@@ -18,7 +18,7 @@ registerTools(server);
 
 // Health check
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "gmail-mcp", version: "1.0.0" });
+  res.json({ status: "ok", server: "ewpmail-mcp", version: "1.0.0" });
 });
 
 // MCP HTTP transport
@@ -32,5 +32,5 @@ app.post("/mcp", async (req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`gmail-mcp listening on port ${PORT}`);
+  console.log(`ewpmail-mcp listening on port ${PORT}`);
 });

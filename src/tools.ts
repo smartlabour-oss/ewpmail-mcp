@@ -2,8 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getAccounts, getAccount } from "./accounts.js";
 import { searchEmails, readEmail } from "./imap-client.js";
-import { parseDoeEmail, isDoeEmail } from "./doe-parser.js";
+import { parseDoeEmail, isDoeEmail, extractIdCardFromRecipient } from "./doe-parser.js";
+import { parseFutureSkyEmail, isFutureSkyEmail } from "./futuresky-parser.js";
+import { getLastSyncedDate, upsertDoeEmails } from "./supabase.js";
 import type { AccountConfig } from "./types.js";
+import type { DoeEmailRow } from "./supabase.js";
 
 function errorResponse(message: string) {
   return {
@@ -163,6 +166,116 @@ export function registerTools(server: McpServer) {
           total: allParsed.length,
           summary: types,
           emails: allParsed,
+        });
+      } catch (err: any) {
+        return errorResponse(err.message);
+      }
+    }
+  );
+
+  // --- sync_doe_emails ---
+  server.tool(
+    "sync_doe_emails",
+    "Sync เมล DOE + Future Sky จาก Hostinger IMAP → Supabase doe_emails table",
+    {
+      since: z.string().optional().describe("ตั้งแต่วันที่ (YYYY-MM-DD) — ว่าง = auto จาก last synced"),
+      limit: z.number().optional().default(100).describe("จำนวนเมลสูงสุดต่อแหล่ง (default 100)"),
+      full_sync: z.boolean().optional().default(false).describe("sync ทั้งหมด ไม่สนใจ last synced"),
+    },
+    async ({ since, limit, full_sync }) => {
+      try {
+        const acc = getAccount("hostinger");
+        if (!acc) return errorResponse("Hostinger account not configured");
+
+        // Determine since date
+        let sinceDate = since;
+        if (!sinceDate && !full_sync) {
+          const lastDate = await getLastSyncedDate("hostinger");
+          if (lastDate) {
+            sinceDate = new Date(lastDate).toISOString().split("T")[0];
+          }
+        }
+
+        const rows: Partial<DoeEmailRow>[] = [];
+        const maxLimit = limit || 100;
+
+        // Fetch DOE emails
+        const doeMessages = await searchEmails(acc, {
+          from: "doe.go.th",
+          limit: maxLimit,
+          since: sinceDate,
+        });
+        for (const msg of doeMessages) {
+          if (!isDoeEmail(msg)) continue;
+          const parsed = parseDoeEmail(msg);
+          const idCard = extractIdCardFromRecipient(msg.to);
+          rows.push({
+            uid: msg.uid,
+            account: "hostinger",
+            date: msg.date,
+            sender: msg.from,
+            recipient: msg.to,
+            subject: msg.subject,
+            source: "doe",
+            type: parsed?.type || "unknown",
+            request_no: parsed?.request_no || "",
+            employer: parsed?.employer || "",
+            applicant: parsed?.applicant || "",
+            reviewer: parsed?.reviewer || "",
+            reviewed_date: parsed?.reviewed_date || "",
+            body_snippet: msg.body.substring(0, 800),
+            id_card: idCard || "",
+            ticket_id: "",
+          });
+        }
+
+        // Fetch Future Sky emails
+        const fsMessages = await searchEmails(acc, {
+          from: "futuresky",
+          limit: maxLimit,
+          since: sinceDate,
+        });
+        for (const msg of fsMessages) {
+          if (!isFutureSkyEmail(msg)) continue;
+          const parsed = parseFutureSkyEmail(msg);
+          const idCard = extractIdCardFromRecipient(msg.to);
+          rows.push({
+            uid: msg.uid,
+            account: "hostinger",
+            date: msg.date,
+            sender: msg.from,
+            recipient: msg.to,
+            subject: msg.subject,
+            source: "futuresky",
+            type: parsed.type,
+            request_no: "",
+            employer: "",
+            applicant: "",
+            reviewer: "",
+            reviewed_date: "",
+            body_snippet: msg.body.substring(0, 800),
+            id_card: idCard || "",
+            ticket_id: parsed.ticket_id,
+          });
+        }
+
+        // Upsert to Supabase
+        const upserted = await upsertDoeEmails(rows);
+
+        // Summary by source and type
+        const summary: Record<string, number> = {};
+        for (const r of rows) {
+          const key = `${r.source}:${r.type}`;
+          summary[key] = (summary[key] || 0) + 1;
+        }
+
+        return jsonResponse({
+          success: true,
+          synced: upserted,
+          doe: doeMessages.length,
+          futuresky: fsMessages.length,
+          since: sinceDate || "all",
+          summary,
         });
       } catch (err: any) {
         return errorResponse(err.message);

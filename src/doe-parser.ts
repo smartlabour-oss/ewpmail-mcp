@@ -74,3 +74,12 @@ export function parseDoeEmail(email: EmailMessage): DoeEmailParsed | null {
 export function isDoeEmail(email: EmailMessage): boolean {
   return email.from.includes("doe.go.th");
 }
+
+/**
+ * Extract 13-digit ID card from catch-all recipient address
+ * e.g. "8500652001091@successlabour168.com" → "8500652001091"
+ */
+export function extractIdCardFromRecipient(to: string): string | null {
+  const match = to.match(/(\d{13})@successlabour168\.com/);
+  return match?.[1] ?? null;
+}

@@ -1,7 +1,7 @@
 {
-  "name": "gmail-mcp",
-  "version": "1.0.0",
-  "description": "Gmail Multi-Account MCP Server",
+  "name": "ewpmail-mcp",
+  "version": "2.0.0",
+  "description": "eWP Mail MCP Server — DOE + Hostinger email integration",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@supabase/supabase-js": "^2.101.1",
     "express": "^5.1.0",
     "imapflow": "^1.0.172",
     "mailparser": "^3.7.2",
