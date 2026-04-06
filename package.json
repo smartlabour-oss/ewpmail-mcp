@@ -1,6 +1,6 @@
 {
   "name": "ewpmail-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "eWP Mail MCP Server — DOE + Hostinger email integration",
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "dev": "tsx src/index.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@supabase/supabase-js": "^2.101.1",
     "express": "^5.1.0",
     "imapflow": "^1.0.172",
