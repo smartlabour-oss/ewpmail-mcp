@@ -7,10 +7,20 @@ import { registerTools } from "./tools.js";
 
 const PORT = parseInt(process.env.PORT || "3457");
 const SERVER_NAME = "ewpmail-mcp";
-const VERSION = "2.1.0";
+const VERSION = "2.1.1";
 
 const app = express();
 app.use(express.json());
+
+// CORS — required for Claude Code (VSCode) MCP session
+app.use((req: Request, res: Response, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id");
+  res.header("Access-Control-Expose-Headers", "Mcp-Session-Id");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // Session store
 const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>();
@@ -56,7 +66,11 @@ app.post("/mcp", async (req: Request, res: Response) => {
       });
       const server = createServer();
 
+      // Guard against recursive close (SDK 1.29.0 bug)
+      let closing = false;
       transport.onclose = () => {
+        if (closing) return;
+        closing = true;
         const sid = transport.sessionId;
         if (sid) sessions.delete(sid);
         server.close().catch(() => {});
