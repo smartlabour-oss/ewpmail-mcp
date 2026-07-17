@@ -78,8 +78,51 @@ export function isDoeEmail(email: EmailMessage): boolean {
 /**
  * Extract 13-digit ID card from catch-all recipient address
  * e.g. "8500652001091@successlabour168.com" → "8500652001091"
+ *
+ * @deprecated ครอบคลุมแค่รูปแบบเลข 13 หลัก — ใช้ extractAlienRef แทนสำหรับ webhook
+ * (บัญชี eWP มีอีเมล 3 รูปแบบ เห็นจากการกวาดกล่องเมล 2026-07-17)
  */
 export function extractIdCardFromRecipient(to: string): string | null {
   const match = to.match(/(\d{13})@successlabour168\.com/);
   return match?.[1] ?? null;
+}
+
+/** คอลัมน์ใน workers ที่ใช้จับคู่คนงานจาก local-part ของอีเมลผู้รับ */
+export type AlienRef = {
+  column: "id_card" | "alien_id" | "stay_permis_no";
+  value: string;
+};
+
+/**
+ * แกะ "ตัวอ้างอิงคนงาน" จากที่อยู่ผู้รับ (กล่องเมล catch-all)
+ *
+ * กรมออกบัญชี eWP ให้คนงานภายใต้อีเมล 3 รูปแบบ (ยืนยันจากกวาดกล่องเมล 2026-07-17):
+ *   <เลข13หลัก>@successlabour168.com  → workers.id_card        เช่น 6985000017523
+ *   <RA…>@successlabour168.com         → workers.alien_id       เช่น RA17607805364907514
+ *   <พาสปอร์ต>@successlabour168.com    → workers.stay_permis_no เช่น CC7096585 (พาสปอร์ตพม่า)
+ *
+ * บาง local-part ของพาสปอร์ตมีชื่อต่อท้าย (CC7991748MYOTHAN) → ตัดเอาแต่แกนพาสปอร์ต
+ * ตรวจ 13 หลักก่อน (ตัวเลขล้วน) แล้วค่อย RA แล้วค่อยพาสปอร์ต เพื่อไม่ให้ชนกัน
+ */
+export function extractAlienRef(to: string): AlienRef | null {
+  // จับ local-part ที่เป็นตัวอักษร/ตัวเลขติดกับ @domain — ทนต่อรูปแบบ "Name <local@domain>"
+  // (bracket/ช่องว่างนำหน้าถูกตัดออกเอง) · 3 รูปแบบเป้าหมายเป็น alnum ล้วนทั้งหมด
+  const local = to.match(/([A-Za-z0-9]+)@successlabour168\.com/i)?.[1];
+  if (!local) return null;
+  if (/^\d{13}$/.test(local)) return { column: "id_card", value: local };
+  if (/^RA\d+$/i.test(local)) return { column: "alien_id", value: local.toUpperCase() };
+  const passport = local.match(/^([A-Za-z]{1,3}\d{5,})/);
+  if (passport) return { column: "stay_permis_no", value: passport[1].toUpperCase() };
+  return null;
+}
+
+/**
+ * ดึงรหัสผ่านชั่วคราวจากเนื้อเมล "ลงทะเบียนสำเร็จ" ของกรม (best-effort)
+ * รูปแบบเนื้อเมลอาจต่างกัน — คืน null ถ้าจับไม่ได้ (ไม่ทำให้ webhook ล้ม)
+ */
+export function extractTempPassword(body: string): string | null {
+  if (!body) return null;
+  const m =
+    body.match(/(?:รหัสผ่าน|password)\s*[:：]?\s*([^\s<>\n]{6,32})/i) ?? null;
+  return m?.[1] ?? null;
 }
