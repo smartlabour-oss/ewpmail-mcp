@@ -95,8 +95,9 @@ app.post("/webhook", async (req: Request, res: Response) => {
     }
 
     // เมล "ลงทะเบียนสำเร็จ" อาจมีรหัสในเนื้อ — เก็บถ้าจับได้ (best-effort)
+    // Hostinger payload ใช้ field `plainBody` (≤200 ตัว) — fallback เผื่อ shape อื่น
     const password = subject.includes("ลงทะเบียน")
-      ? extractTempPassword(String(msg.body ?? msg.text ?? ""))
+      ? extractTempPassword(String(msg.plainBody ?? msg.body ?? msg.text ?? ""))
       : null;
 
     const result = await fillEwpEmail(ref, to, password);
