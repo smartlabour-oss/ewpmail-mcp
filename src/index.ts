@@ -9,7 +9,7 @@ import { fillEwpEmail } from "./supabase.js";
 
 const PORT = parseInt(process.env.PORT || "3457");
 const SERVER_NAME = "ewpmail-mcp";
-const VERSION = "2.1.0";
+const VERSION = "2.1.1";
 
 // Shared secret ที่ Hostinger แนบมาทุก webhook (Authorization: Bearer <secret>)
 // ตั้งใน Coolify env — ถ้าไม่ตั้ง จะรับแบบไม่ยืนยัน (ปลอดภัยน้อย ควรตั้งเสมอ)
@@ -17,6 +17,16 @@ const WEBHOOK_SECRET = process.env.EWPMAIL_WEBHOOK_SECRET || "";
 
 const app = express();
 app.use(express.json());
+
+// CORS — required for Claude Code (VSCode) MCP session
+app.use((req: Request, res: Response, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id");
+  res.header("Access-Control-Expose-Headers", "Mcp-Session-Id");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 /** ดึงอีเมลออกจากฟิลด์ที่อาจเป็น string / {address} / array (Hostinger ส่ง to เป็น array of {address,name}) */
 function pickAddress(v: unknown): string {
@@ -130,7 +140,11 @@ app.post("/mcp", async (req: Request, res: Response) => {
       });
       const server = createServer();
 
+      // Guard against recursive close (SDK 1.29.0 bug)
+      let closing = false;
       transport.onclose = () => {
+        if (closing) return;
+        closing = true;
         const sid = transport.sessionId;
         if (sid) sessions.delete(sid);
         server.close().catch(() => {});
