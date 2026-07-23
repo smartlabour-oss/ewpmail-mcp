@@ -8,6 +8,7 @@ import { extractAlienRef, extractTempPassword } from "./doe-parser.js";
 import { fillEwpEmail } from "./supabase.js";
 import { findResetLink } from "./reset-link.js";
 import { getCatchAllAccount } from "./accounts.js";
+import { syncViaRest } from "./rest-sync.js";
 
 const PORT = parseInt(process.env.PORT || "3457");
 const SERVER_NAME = "ewpmail-mcp";
@@ -19,6 +20,11 @@ const WEBHOOK_SECRET = process.env.EWPMAIL_WEBHOOK_SECRET || "";
 
 const app = express();
 app.use(express.json());
+
+app.get("/sync", async (_req, res) => {
+  try { const n = await syncViaRest(); res.json({ ok: true, synced: n }); }
+  catch (e) { res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) }); }
+});
 
 // CORS — required for Claude Code (VSCode) MCP session
 app.use((req: Request, res: Response, next) => {
