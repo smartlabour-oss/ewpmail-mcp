@@ -96,6 +96,14 @@ export async function fillEwpEmail(
   };
 }
 
+/** uid ที่มีอยู่แล้วของ account นี้ (ไว้ให้ rest-sync ข้ามเมลที่ ingest ไปแล้ว) */
+export async function existingDoeUids(account: string, uids: number[]): Promise<Set<number>> {
+  if (uids.length === 0) return new Set();
+  const sb = getSupabase();
+  const { data } = await sb.from("doe_emails").select("uid").eq("account", account).in("uid", uids);
+  return new Set((data ?? []).map((r: { uid: number }) => r.uid));
+}
+
 export async function upsertDoeEmails(rows: Partial<DoeEmailRow>[]): Promise<number> {
   if (rows.length === 0) return 0;
   const sb = getSupabase();
