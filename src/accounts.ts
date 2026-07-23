@@ -49,3 +49,11 @@ export function getAccount(id: string): AccountConfig | undefined {
 export function getDefaultAccount(): AccountConfig | undefined {
   return getAccounts()[0];
 }
+
+// Catch-all mailbox — DOE/SendGrid reset mails for accounts that don't have
+// a dedicated worker inbox land here. Same account /webhook and /sync use.
+const CATCH_ALL_EMAIL = "successlabour168@successlabour168.com";
+
+export function getCatchAllAccount(): AccountConfig | undefined {
+  return getAccounts().find((a) => a.email === CATCH_ALL_EMAIL);
+}
