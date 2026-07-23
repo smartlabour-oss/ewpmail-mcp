@@ -6,6 +6,8 @@ import express, { type Request, type Response } from "express";
 import { registerTools } from "./tools.js";
 import { extractAlienRef, extractTempPassword } from "./doe-parser.js";
 import { fillEwpEmail } from "./supabase.js";
+import { findResetLink } from "./reset-link.js";
+import { getCatchAllAccount } from "./accounts.js";
 
 const PORT = parseInt(process.env.PORT || "3457");
 const SERVER_NAME = "ewpmail-mcp";
@@ -108,6 +110,37 @@ app.post("/webhook", async (req: Request, res: Response) => {
     );
   } catch (e) {
     console.error("[ewpmail] /webhook error:", e instanceof Error ? e.message : e);
+  }
+});
+
+// DOE password-reset flow (doe-bridge) — อ่านกล่องเมล catch-all หาลิงก์รีเซ็ต SendGrid
+// GET /reset-link?recipient=<email>&since=<iso> → { link: string | null }
+app.get("/reset-link", async (req: Request, res: Response) => {
+  // กันของปลอม — ใช้ secret เดียวกับ /webhook (Authorization: Bearer <secret>)
+  if (WEBHOOK_SECRET) {
+    const auth = String(req.headers.authorization || "");
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (token !== WEBHOOK_SECRET) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+  } else {
+    console.warn("[ewpmail] /reset-link: EWPMAIL_WEBHOOK_SECRET ไม่ได้ตั้ง — รับแบบไม่ยืนยัน (ควรตั้ง)");
+  }
+
+  const recipient = String(req.query.recipient ?? "").trim();
+  const since = String(req.query.since ?? "").trim() || new Date(Date.now() - 10 * 60_000).toISOString();
+  if (!recipient) return res.status(400).json({ error: "recipient required" });
+
+  try {
+    const account = getCatchAllAccount();
+    if (!account) {
+      return res.status(500).json({ error: "catch-all account not configured" });
+    }
+    const link = await findResetLink(account, recipient, since);
+    res.json({ link });
+  } catch (e: any) {
+    console.error("[ewpmail] /reset-link error:", e instanceof Error ? e.message : e);
+    res.status(500).json({ error: e?.message ?? String(e) });
   }
 });
 
