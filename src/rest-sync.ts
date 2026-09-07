@@ -7,6 +7,7 @@ import { upsertDoeEmails, existingDoeUids, type DoeEmailRow } from './supabase.j
 import { classifyDoeMail, extractTicketId } from './classify.js';
 import { parseDoeEmail, extractAlienRef } from './doe-parser.js';
 import type { EmailMessage } from './types.js';
+import { snippetForDb } from './redact.js';
 
 const API = 'https://api.mail.hostinger.com';
 const TOKEN = process.env.HOSTINGER_MAIL_API_TOKEN || '';
@@ -66,7 +67,7 @@ export async function syncViaRest(sinceMinutes = 20): Promise<number> {
       applicant: parsed?.applicant || '',
       reviewer: parsed?.reviewer || '',
       reviewed_date: parsed?.reviewed_date || '',
-      body_snippet: text.slice(0, 1200),
+      body_snippet: snippetForDb(text, 1200),
       id_card: ref?.column === 'id_card' ? ref.value : '',
       ticket_id: type === 'helpdesk' ? extractTicketId(subject) : '',
     });
