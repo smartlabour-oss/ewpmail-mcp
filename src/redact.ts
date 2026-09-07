@@ -27,9 +27,12 @@ export const LINK_REMOVED = "[ลิงก์ถูกลบ]";
 /** อักขระที่ URL ใช้ได้ (RFC 3986) — ตั้งใจไม่รวมอักษรไทย/ช่องว่าง/วงเล็บปิด/quote */
 const URL_CHARS = "[A-Za-z0-9\\-._~:/?#@!$&*+,;=%'\\[\\]]";
 
-/** ก้อนอักขระ URL ที่มีชิ้นส่วนลิงก์รีเซ็ตอยู่ข้างใน — ตัดทั้งก้อน */
+/**
+ * ก้อนอักขระ URL ที่มีชิ้นส่วนลิงก์รีเซ็ตอยู่ข้างใน — ตัดทั้งก้อน
+ * lookbehind ล็อกให้เริ่มจับที่หัวก้อนเท่านั้น ไม่งั้น engine ลองใหม่ทุก offset ในก้อนยาว (O(n²))
+ */
 const RESET_LINK_RE = new RegExp(
-  `${URL_CHARS}*(?:sendgrid|ls/click|wf/open|resetpassword|ref_id=|user_id=|upn=)${URL_CHARS}*`,
+  `(?<!${URL_CHARS})${URL_CHARS}*(?:sendgrid|ls/click|wf/open|resetpassword|ref_id=|user_id=|upn=)${URL_CHARS}*`,
   "gi",
 );
 
