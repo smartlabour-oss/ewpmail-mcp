@@ -7,6 +7,7 @@ import { parseFutureSkyEmail, isFutureSkyEmail } from "./futuresky-parser.js";
 import { getLastSyncedDate, upsertDoeEmails } from "./supabase.js";
 import type { AccountConfig } from "./types.js";
 import type { DoeEmailRow } from "./supabase.js";
+import { snippetForDb } from "./redact.js";
 
 function errorResponse(message: string) {
   return {
@@ -223,7 +224,7 @@ export function registerTools(server: McpServer) {
             applicant: parsed?.applicant || "",
             reviewer: parsed?.reviewer || "",
             reviewed_date: parsed?.reviewed_date || "",
-            body_snippet: msg.body.substring(0, 800),
+            body_snippet: snippetForDb(msg.body, 800),
             id_card: idCard || "",
             ticket_id: "",
           });
@@ -253,7 +254,7 @@ export function registerTools(server: McpServer) {
             applicant: "",
             reviewer: "",
             reviewed_date: "",
-            body_snippet: msg.body.substring(0, 800),
+            body_snippet: snippetForDb(msg.body, 800),
             id_card: idCard || "",
             ticket_id: parsed.ticket_id,
           });
