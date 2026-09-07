@@ -9,6 +9,7 @@ import { fillEwpEmail } from "./supabase.js";
 import { findResetLink } from "./reset-link.js";
 import { getCatchAllAccount } from "./accounts.js";
 import { syncViaRest } from "./rest-sync.js";
+import { bearerFrom, checkMcpToken } from "./mcp-auth.js";
 
 const PORT = parseInt(process.env.PORT || "3457");
 const SERVER_NAME = "ewpmail-mcp";
@@ -17,6 +18,13 @@ const VERSION = "2.1.1";
 // Shared secret ที่ Hostinger แนบมาทุก webhook (Authorization: Bearer <secret>)
 // ตั้งใน Coolify env — ถ้าไม่ตั้ง จะรับแบบไม่ยืนยัน (ปลอดภัยน้อย ควรตั้งเสมอ)
 const WEBHOOK_SECRET = process.env.EWPMAIL_WEBHOOK_SECRET || "";
+
+// Token ของ /mcp — client (Claude Code .mcp.json ฯลฯ) ต้องส่ง Authorization: Bearer <token>
+// ไม่ตั้ง = /mcp ปิดทั้งเส้น (503) ดู mcp-auth.ts ว่าทำไมต้อง fail-closed
+const MCP_TOKEN = process.env.EWPMAIL_MCP_TOKEN || "";
+// bind เฉพาะ loopback — Caddy (ewpmail.successlabour168.com) และ doe-bridge เรียกผ่าน localhost อยู่แล้ว
+// เดิม 0.0.0.0 ทำให้ http://<ip>:3457/mcp เปิดตรงสู่อินเทอร์เน็ต (ตรวจ 2026-09-07)
+const HOST = process.env.HOST || "127.0.0.1";
 
 const app = express();
 app.use(express.json());
@@ -34,6 +42,29 @@ app.use((req: Request, res: Response, next) => {
   res.header("Access-Control-Expose-Headers", "Mcp-Session-Id");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
+});
+
+// ด่าน token ของ /mcp ทุก method (หลัง CORS เพื่อให้ preflight ผ่าน · ก่อน handler ทุกตัว)
+let warnedMcpDisabled = false;
+app.use("/mcp", (req: Request, res: Response, next) => {
+  const verdict = checkMcpToken(bearerFrom(req.headers.authorization), MCP_TOKEN);
+  if (verdict === "ok") return next();
+  if (verdict === "disabled") {
+    if (!warnedMcpDisabled) {
+      warnedMcpDisabled = true;
+      console.error(`[${SERVER_NAME}] /mcp ปิดอยู่ — ยังไม่ได้ตั้ง EWPMAIL_MCP_TOKEN`);
+    }
+    return res.status(503).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "MCP disabled: EWPMAIL_MCP_TOKEN not configured on server" },
+      id: null,
+    });
+  }
+  res.status(401).set("WWW-Authenticate", 'Bearer realm="ewpmail-mcp"').json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Unauthorized" },
+    id: null,
+  });
 });
 
 /** ดึงอีเมลออกจากฟิลด์ที่อาจเป็น string / {address} / array (Hostinger ส่ง to เป็น array of {address,name}) */
@@ -236,7 +267,7 @@ app.delete("/mcp", async (req: Request, res: Response) => {
   res.sendStatus(200);
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[${SERVER_NAME}] HTTP mode — http://localhost:${PORT}/mcp`);
+app.listen(PORT, HOST, () => {
+  console.log(`[${SERVER_NAME}] HTTP mode — http://${HOST}:${PORT}/mcp (${MCP_TOKEN ? "token required" : "DISABLED: set EWPMAIL_MCP_TOKEN"})`);
   console.log(`[${SERVER_NAME}] Health:    http://localhost:${PORT}/health`);
 });
