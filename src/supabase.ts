@@ -6,6 +6,10 @@ let instance: SupabaseClient | null = null;
 export function getSupabase(): SupabaseClient {
   if (!instance) {
     const url = process.env.SUPABASE_URL;
+    // ⚠️ ชื่อหลอก: ตัวแปรชื่อ ANON แต่ค่าที่ใส่จริงบน VPS เป็น service-role key (สิทธิ์เต็ม)
+    // หลักฐาน: doe_emails ไม่มี grant ให้ anon เลย แต่ /sync เขียนเข้าได้ตลอด
+    // ใครมา "แก้ให้ถูก" เป็น anon key จริง = /sync พังทันที (view/ตารางใหม่ revoke anon ไว้)
+    // การเปลี่ยนชื่อ/หมุนคีย์เป็นงานแยก (owner คิวไว้แล้ว) — อย่าทำใน PR นี้
     const key = process.env.SUPABASE_ANON_KEY;
     if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
     instance = createClient(url, key);
