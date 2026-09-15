@@ -104,6 +104,37 @@ export async function existingDoeUids(account: string, uids: number[]): Promise<
   return new Set((data ?? []).map((r: { uid: number }) => r.uid));
 }
 
+/**
+ * ชุดอีเมลบัญชี eWP ที่ "ปล่อยแล้ว" — คนงานที่ออกจากเราไปแล้ว ไม่ต้องเก็บเมลของเขาอีก
+ *
+ * ⚠️ อ่านไม่ได้ต้อง throw เสมอ ห้าม fallback เป็นชุดว่าง — ชุดว่างแปลว่า "ไม่มีใครถูกปล่อย"
+ * ซึ่งจะทำให้ ingest ทุกฉบับเงียบ ๆ ต่อไปเป็นเดือนโดยไม่มีใครรู้ · ให้ /sync ล้มดังกว่า
+ * แล้ว n8n เห็น (view นี้มาจาก migration ฝั่ง webapp — ต้อง apply ก่อน deploy ตัวนี้)
+ */
+export async function fetchReleasedEmails(): Promise<Set<string>> {
+  const sb = getSupabase();
+  const { data, error } = await sb.from("v_ewp_account_released").select("email");
+  if (error) throw new Error("v_ewp_account_released: " + error.message);
+  return new Set((data ?? []).map((r: { email: string }) => String(r.email).toLowerCase()));
+}
+
+/**
+ * log ว่าเราปฏิเสธเก็บเมลอะไรไปบ้าง — เก็บแค่ email/uid/ชนิด ไม่มีหัวข้อ ไม่มีเนื้อ
+ *
+ * พังแล้วไม่ล้ม sync: log หายยังกู้ได้จากกล่องเมล แต่ sync ล้มแปลว่าเมลของคนที่ยัง
+ * เป็นลูกค้าอยู่ไม่เข้าระบบ — เสียหายกว่ากันมาก
+ */
+export async function logDroppedMails(
+  rows: { email: string; uid: number; mail_date: string | null; mail_type: string }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("doe_mail_dropped")
+    .upsert(rows, { onConflict: "email,uid", ignoreDuplicates: true });
+  if (error) console.error("[release] doe_mail_dropped upsert failed:", error.message);
+}
+
 export async function upsertDoeEmails(rows: Partial<DoeEmailRow>[]): Promise<number> {
   if (rows.length === 0) return 0;
   const sb = getSupabase();
